@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:js_interop';
 import 'dart:ui_web' as ui_web;
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:web/web.dart' as web;
@@ -14,6 +13,8 @@ external _Bridge get _bridge;
 extension type _Bridge._(JSObject _) implements JSObject {
   external JSPromise<JSAny?> start(JSFunction cb, int fps);
   external void stop();
+  external void beep(int freq, int ms);
+  external bool say(String text, String lang, bool cut);
   external web.HTMLVideoElement get video;
 }
 
@@ -63,7 +64,9 @@ class _HomeState extends State<Home> {
   double conf = 0;
   final cal = Calibration();
   RakatCounter? counter;
-  final audio = AudioPlayer();
+  int okFrames = 0;
+  DateTime lastSay = DateTime(2000);
+  String? lastHint;
   Timer? timer;
 
   @override
@@ -82,7 +85,37 @@ class _HomeState extends State<Home> {
     super.dispose();
   }
 
-  void _sfx(String e) => audio.play(AssetSource('audio/$e.mp3')).catchError((_) {});
+  static const _nth = {'2': 'دوم', '3': 'سوم', '4': 'چهارم'};
+
+  void _sfx(String e) {
+    if (e == 'takbir') {
+      _bridge.say('الله أکبر', 'ar-SA', false);
+    } else if (e.startsWith('rakat_')) {
+      _bridge.say('رکعت ${_nth[e.substring(6)] ?? e.substring(6)}', 'fa-IR', false);
+    } else if (e == 'finished') {
+      _bridge.beep(1000, 400);
+      _bridge.say('نماز تمام شد', 'fa-IR', false);
+    }
+  }
+
+  /// راهنمای صوتی و شروع خودکار: بدون لمس صفحه.
+  void _guide() {
+    if (hint == null) {
+      lastHint = null;
+      if (++okFrames >= 36) {
+        okFrames = 0;
+        Future.microtask(_beginCalib);
+      }
+    } else {
+      okFrames = 0;
+      final now = DateTime.now();
+      if (hint != lastHint && now.difference(lastSay).inSeconds >= 3) {
+        lastHint = hint;
+        lastSay = now;
+        _bridge.say(hint!, 'fa-IR', true);
+      }
+    }
+  }
 
   Future<void> _start() async {
     setState(() => error = null);
@@ -102,6 +135,7 @@ class _HomeState extends State<Home> {
     final f = l == null ? null : Frame.from(l);
     setState(() {
       hint = l == null ? 'شما در کادر دیده نمی‌شوید' : framingHint(l, standing: stage == Stage.setup);
+      if (stage == Stage.setup) _guide();
       if (f == null) { pose = Pose.unknown; return; }
       if (stage == Stage.calib && capturing) cal.add(order[ci], f);
       if (stage == Stage.run && cal.ready) {
@@ -114,6 +148,7 @@ class _HomeState extends State<Home> {
   }
 
   void _beginCalib() {
+    if (stage != Stage.setup) return;
     cal.reset();
     ci = 0;
     setState(() { stage = Stage.calib; error = null; });
@@ -124,19 +159,23 @@ class _HomeState extends State<Home> {
     if (ci >= order.length) {
       if (cal.finish()) {
         counter = RakatCounter(prayer!['rakats'] as int)..onEvent = _sfx;
+        _bridge.beep(1000, 300);
+        _bridge.say('آماده‌ام. نماز را شروع کنید', 'fa-IR', true);
         setState(() => stage = Stage.run);
       } else {
         setState(() { stage = Stage.setup; error = 'کالیبراسیون کامل نشد. کادر را بررسی و دوباره تلاش کنید.'; });
       }
       return;
     }
-    var t = 5;
+    var t = ci == 0 ? 4 : 7;
+    _bridge.say(faHow[order[ci]]!, 'fa-IR', true);
     setState(() { cmsg = '$t'; capturing = false; });
     timer = Timer.periodic(const Duration(seconds: 1), (x) {
       t--;
       if (t >= 1) {
         setState(() => cmsg = '$t');
       } else if (t == 0) {
+        _bridge.beep(1200, 150);
         setState(() { capturing = true; cmsg = 'ثبت…'; });
       } else if (t == -3) {
         x.cancel();
@@ -207,12 +246,13 @@ class _HomeState extends State<Home> {
   Widget _setup() => ListView(children: [
         _preview(360),
         const SizedBox(height: 16),
-        Text(hint ?? 'چیدمان مناسب است', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: hint == null ? Colors.green.shade800 : null)),
+        Text(hint ?? 'چیدمان مناسب است', style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: hint == null ? Colors.green.shade800 : null)),
         const SizedBox(height: 8),
         const Text('گوشی را از پهلو، حدود ۲ تا ۳ متر دورتر، هم‌سطح کمر یا کمی بالاتر روی جای ثابتی بگذارید. کل بدن از سر تا پا باید دیده شود.'),
         if (error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(error!, style: TextStyle(color: Theme.of(context).colorScheme.error))),
         const SizedBox(height: 16),
-        FilledButton(onPressed: hint == null ? _beginCalib : null, child: const Text('ادامه: معرفی حالت‌ها')),
+        Text(hint == null ? 'ثابت بمانید؛ تا چند ثانیه دیگر خودکار شروع می‌شود…' : 'بعد از قرارگرفتن در کادر، همه‌چیز خودکار شروع می‌شود و لازم نیست صفحه را لمس کنید.'),
+        TextButton(onPressed: hint == null ? _beginCalib : null, child: const Text('شروع فوری')),
         TextButton(onPressed: _stop, child: const Text('بازگشت')),
       ]);
 
