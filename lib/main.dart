@@ -64,7 +64,7 @@ class _HomeState extends State<Home> {
   double conf = 0;
   final cal = Calibration();
   RakatCounter? counter;
-  int okFrames = 0;
+  int okFrames = 0, frames = 0;
   DateTime lastSay = DateTime(2000);
   String? lastHint;
   Timer? timer;
@@ -134,6 +134,7 @@ class _HomeState extends State<Home> {
     }
     final f = l == null ? null : Frame.from(l);
     setState(() {
+      frames++;
       hint = l == null ? 'شما در کادر دیده نمی‌شوید' : framingHint(l, standing: stage == Stage.setup);
       if (stage == Stage.setup) _guide();
       if (f == null) { pose = Pose.unknown; return; }
@@ -211,6 +212,7 @@ class _HomeState extends State<Home> {
             child: Column(children: [
               if (stage != Stage.intro)
                 _preview(stage == Stage.setup ? 320 : stage == Stage.calib ? 260 : (hide ? 0 : 140)),
+              if (stage != Stage.intro) Text('فریم‌های دریافتی: $frames', style: Theme.of(context).textTheme.bodySmall),
               Expanded(
                 child: switch (stage) {
                   Stage.intro => _intro(),
