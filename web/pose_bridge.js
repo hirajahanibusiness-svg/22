@@ -53,6 +53,7 @@ window.PoseBridge = {
     await video.play();
     const step = (t) => {
       raf = requestAnimationFrame(step);
+      if (video.paused) video.play().catch(() => {});
       if (t - last < 1000 / fps || video.readyState < 2) return;
       last = t;
       const l = lm.detectForVideo(video, t).landmarks[0];
