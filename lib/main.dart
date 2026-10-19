@@ -14,7 +14,7 @@ extension type _Bridge._(JSObject _) implements JSObject {
   external JSPromise<JSAny?> start(JSFunction cb, int fps);
   external void stop();
   external void beep(int freq, int ms);
-  external bool say(String text, String lang, bool cut);
+  external void say(String text, String lang, bool cut);
   external web.HTMLVideoElement get video;
 }
 
@@ -207,12 +207,19 @@ class _HomeState extends State<Home> {
         body: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(20),
-            child: switch (stage) {
-              Stage.intro => _intro(),
-              Stage.setup => _setup(),
-              Stage.calib => _calib(),
-              Stage.run => _run(),
-            },
+            // پیش‌نمایش دوربین بین مرحله‌ها ثابت می‌ماند تا ویدیو قطع و وصل نشود
+            child: Column(children: [
+              if (stage != Stage.intro)
+                _preview(stage == Stage.setup ? 320 : stage == Stage.calib ? 260 : (hide ? 0 : 140)),
+              Expanded(
+                child: switch (stage) {
+                  Stage.intro => _intro(),
+                  Stage.setup => _setup(),
+                  Stage.calib => _calib(),
+                  Stage.run => _run(),
+                },
+              ),
+            ]),
           ),
         ),
       );
@@ -244,7 +251,6 @@ class _HomeState extends State<Home> {
       ]);
 
   Widget _setup() => ListView(children: [
-        _preview(360),
         const SizedBox(height: 16),
         Text(hint ?? 'چیدمان مناسب است', style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: hint == null ? Colors.green.shade800 : null)),
         const SizedBox(height: 8),
@@ -257,7 +263,6 @@ class _HomeState extends State<Home> {
       ]);
 
   Widget _calib() => Column(children: [
-        _preview(300),
         const Spacer(),
         Text('${ci + 1} از ${order.length}'),
         Text(faHow[order[ci.clamp(0, 3)]]!, style: Theme.of(context).textTheme.headlineSmall),
@@ -270,7 +275,6 @@ class _HomeState extends State<Home> {
     final c = counter!;
     final cs = Theme.of(context).colorScheme;
     return Column(children: [
-      if (!hide) _preview(140),
       const Spacer(),
       Text(c.done ? 'نماز تمام شد' : 'رکعت', style: Theme.of(context).textTheme.titleLarge),
       Text('${c.rakat}', style: TextStyle(fontSize: 150, fontWeight: FontWeight.bold, height: 1, color: cs.primary)),
