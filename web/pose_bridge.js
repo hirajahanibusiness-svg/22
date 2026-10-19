@@ -12,7 +12,7 @@ async function load() {
     baseOptions: { modelAssetPath: 'mediapipe/pose_landmarker_lite.task', delegate },
     runningMode: 'VIDEO', numPoses: 1,
   });
-  try { lm = await make('GPU'); } catch (_) { lm = await make('CPU'); }
+  try { lm = await make('CPU'); } catch (_) { lm = await make('GPU'); } // CPU پایدارتر است؛ GPU با رندر Flutter تداخل می‌کند
 }
 
 let ac;
