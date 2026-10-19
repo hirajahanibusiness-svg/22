@@ -15,9 +15,36 @@ async function load() {
   try { lm = await make('GPU'); } catch (_) { lm = await make('CPU'); }
 }
 
+let ac;
+function ctx() {
+  ac ??= new (window.AudioContext || window.webkitAudioContext)();
+  if (ac.state === 'suspended') ac.resume();
+  return ac;
+}
+
 window.PoseBridge = {
   video,
+  beep(freq, ms) {
+    try {
+      const c = ctx(), o = c.createOscillator(), g = c.createGain();
+      o.frequency.value = freq; g.gain.value = 0.25;
+      o.connect(g); g.connect(c.destination);
+      o.start(); o.stop(c.currentTime + ms / 1000);
+    } catch (_) {}
+  },
+  say(text, lang, cut) {
+    try {
+      const s = window.speechSynthesis;
+      if (!s) return false;
+      if (cut) s.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = lang; u.rate = 0.9;
+      s.speak(u);
+      return true;
+    } catch (_) { return false; }
+  },
   async start(cb, fps) {
+    ctx(); // فعال‌سازی صدا هم‌زمان با لمس کاربر
     if (!lm) await load();
     stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false,
